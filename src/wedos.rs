@@ -16,19 +16,39 @@ struct WapiDnsRowUpdateData {
     rdata: String,
 }
 
+#[derive(Debug)]
 enum WapiCommand {
     ListDomains,
-    DnsRowsList,
-    DnsRowUpdate,
+    DnsRowsList(WapiDsnRowsListData),
+    DnsRowUpdate(WapiDnsRowUpdateData),
 }
 
 impl WapiCommand {
-    fn key(&self) -> String {
+    fn api_key(&self) -> &'static str {
         match self {
-            WapiCommand::ListDomains => "dns-domains-list".to_string(),
-            WapiCommand::DnsRowsList => "dns-rows-list".to_string(),
-            WapiCommand::DnsRowUpdate => "dns-row-update".to_string(),
+            WapiCommand::ListDomains => "dns-domains-list",
+            WapiCommand::DnsRowsList(_) => "dns-rows-list",
+            WapiCommand::DnsRowUpdate(_) => "dns-row-update",
         }
+    }
+
+    fn get_request(&self) -> WapiRequest {
+        let credentials = get_credentials();
+
+        let request = WapiRequest {
+            user: credentials.0,
+            auth: credentials.1,
+
+            test: env::var("TEST").unwrap_or("0".to_string()),
+            command: self.api_key(),
+            data: match self {
+                WapiCommand::ListDomains => json!({}),
+                WapiCommand::DnsRowsList(data) => json!(data),
+                WapiCommand::DnsRowUpdate(data) => json!(data),
+            },
+        };
+
+        return request;
     }
 }
 
@@ -37,8 +57,8 @@ struct WapiRequest {
     user: String,
     auth: String,
     test: String,
-    command: String,
-    data: WapiDnsRowUpdateData, // TODO learn about how to handle this in a generic way based on command
+    command: &'static str,
+    data: Value,
 }
 
 #[derive(Debug, Serialize)]
@@ -46,7 +66,7 @@ struct WapiPayload {
     request: WapiRequest,
 }
 
-fn get_request(command: WapiCommand, data: WapiDnsRowUpdateData) -> WapiRequest {
+fn get_credentials() -> (String, String) {
     let current_hour_prague = chrono::Utc::now()
         .with_timezone(&chrono_tz::Europe::Prague)
         .format("%H");
@@ -68,13 +88,7 @@ fn get_request(command: WapiCommand, data: WapiDnsRowUpdateData) -> WapiRequest 
     auth_hasher.update(wapi_auth_raw);
     let wapi_auth = format!("{:x}", auth_hasher.finalize());
 
-    return WapiRequest {
-        user: wapi_user,
-        auth: wapi_auth,
-        test: env::var("TEST").unwrap_or("0".to_string()),
-        command: command.key(),
-        data,
-    };
+    return (wapi_user, wapi_auth);
 }
 
 pub fn update_a_record(ipv4: String) {
@@ -82,19 +96,25 @@ pub fn update_a_record(ipv4: String) {
     let wapi_url =
         env::var("WEDOS_API_URL").unwrap_or(String::from("https://api.wedos.com/wapi/json"));
 
-    let command = WapiCommand::DnsRowUpdate;
-    let data = WapiDnsRowUpdateData {
+    // let command = WapiCommand::ListDomains;
+
+    // let command = WapiCommand::DnsRowsList(WapiDsnRowsListData {
+    //     domain: env::var("DOMAIN").unwrap(),
+    // });
+
+    let command = WapiCommand::DnsRowUpdate(WapiDnsRowUpdateData {
         domain: env::var("DOMAIN").unwrap(),
         row_id: env::var("DNS_ROW_ID").unwrap(),
         ttl: "300".to_string(),
         rdata: ipv4,
-    };
+    });
 
-    let request = get_request(command, data);
+    let request = command.get_request();
     let payload = WapiPayload { request };
     let mut payload_map = HashMap::new();
     payload_map.insert("request", json!(payload).to_string());
 
+    println!("{:?}", payload);
     let response = reqwest_client
         .post(wapi_url)
         .form(&payload_map)

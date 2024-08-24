@@ -91,23 +91,10 @@ fn get_credentials() -> (String, String) {
     return (wapi_user, wapi_auth);
 }
 
-pub fn update_a_record(ipv4: String) {
+fn make_request(command: WapiCommand) {
     let reqwest_client = reqwest::blocking::Client::new();
     let wapi_url =
         env::var("WEDOS_API_URL").unwrap_or(String::from("https://api.wedos.com/wapi/json"));
-
-    // let command = WapiCommand::ListDomains;
-
-    // let command = WapiCommand::DnsRowsList(WapiDsnRowsListData {
-    //     domain: env::var("DOMAIN").unwrap(),
-    // });
-
-    let command = WapiCommand::DnsRowUpdate(WapiDnsRowUpdateData {
-        domain: env::var("DOMAIN").unwrap(),
-        row_id: env::var("DNS_ROW_ID").unwrap(),
-        ttl: "300".to_string(),
-        rdata: ipv4,
-    });
 
     let request = command.get_request();
     let payload = WapiPayload { request };
@@ -122,4 +109,26 @@ pub fn update_a_record(ipv4: String) {
         .unwrap()
         .json::<Value>();
     println!("{:#?}", response);
+}
+
+pub fn list_domains() {
+    let command = WapiCommand::ListDomains;
+    make_request(command)
+}
+
+pub fn list_dns_rows(domain: String) {
+    let command = WapiCommand::DnsRowsList(WapiDsnRowsListData {
+        domain,
+    });
+    make_request(command)
+}
+
+pub fn update_a_record(ipv4: String, domain: String, row_id: String, ttl: Option<i16>) {
+    let command = WapiCommand::DnsRowUpdate(WapiDnsRowUpdateData {
+        domain,
+        row_id,
+        ttl: ttl.unwrap_or(300).to_string(),
+        rdata: ipv4,
+    });
+    make_request(command);
 }

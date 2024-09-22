@@ -35,7 +35,7 @@ impl WapiCommand {
     fn get_request(&self) -> WapiRequest {
         let credentials = get_credentials();
 
-        let request = WapiRequest {
+        WapiRequest {
             user: credentials.0,
             auth: credentials.1,
 
@@ -46,9 +46,7 @@ impl WapiCommand {
                 WapiCommand::DnsRowsList(data) => json!(data),
                 WapiCommand::DnsRowUpdate(data) => json!(data),
             },
-        };
-
-        return request;
+        }
     }
 }
 
@@ -88,7 +86,7 @@ fn get_credentials() -> (String, String) {
     auth_hasher.update(wapi_auth_raw);
     let wapi_auth = format!("{:x}", auth_hasher.finalize());
 
-    return (wapi_user, wapi_auth);
+    (wapi_user, wapi_auth)
 }
 
 fn make_request(command: WapiCommand) {

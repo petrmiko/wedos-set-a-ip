@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use serde::Serialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use sha1::{Digest, Sha1};
 use std::env;
 use std::net::Ipv4Addr;
@@ -66,9 +66,10 @@ struct WapiPayload {
 }
 
 fn get_credentials() -> Result<(String, String)> {
-    let current_hour_prague = chrono::Utc::now()
-        .with_timezone(&chrono_tz::Europe::Prague)
-        .format("%H");
+    let current_hour_prague = format!(
+        "{:02}",
+        jiff::Timestamp::now().in_tz("Europe/Prague")?.hour()
+    );
 
     let wapi_user = env::var("WEDOS_USER").context("WEDOS_USER not set")?;
     let wapi_password = env::var("WEDOS_PASSWORD").context("WEDOS_PASSWORD not set")?;

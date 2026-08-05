@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use clap::{Arg, Command};
-use dotenv::dotenv;
+use dotenvy::dotenv;
 use std::env;
 
 mod ipv4;

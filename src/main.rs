@@ -1,36 +1,52 @@
-use dotenv::dotenv;
+use anyhow::{Context, Result};
 use clap::{Arg, Command};
+use dotenv::dotenv;
 use std::env;
 
 mod ipv4;
 mod wedos;
 
-fn main() {
+fn main() -> Result<()> {
     dotenv().ok();
     let arg_matches = Command::new("WedosDnsTool")
         .version("0.0.1")
-        .arg(Arg::new("MODE").short('m').long("mode").value_parser(["public-ip", "list-domains", "list-dns-rows", "set-ip"]).required(true))
+        .arg(
+            Arg::new("MODE")
+                .short('m')
+                .long("mode")
+                .value_parser(["public-ip", "list-domains", "list-dns-rows", "set-ip"])
+                .required(true),
+        )
         .get_matches();
 
-    match arg_matches.get_one::<String>("MODE").expect("'MODE' is required and parsing will fail if its missing").as_str() {
+    match arg_matches
+        .get_one::<String>("MODE")
+        .expect("'MODE' is required and parsing will fail if its missing")
+        .as_str()
+    {
         "public-ip" => {
-            let public_ipv4 = ipv4::get_public_ipv4();
-            println!("{}", public_ipv4);
+            println!("{}", ipv4::get_public_ipv4()?);
         }
         "list-domains" => {
-            wedos::list_domains();
+            println!("{:#?}", wedos::list_domains()?);
         }
         "list-dns-rows" => {
-            let domain = env::var("DOMAIN").unwrap();
-            wedos::list_dns_rows(domain);
-
+            let domain = env::var("DOMAIN").context("DOMAIN not set")?;
+            println!("{:#?}", wedos::list_dns_rows(domain)?);
         }
         "set-ip" => {
-            let public_ipv4 = ipv4::get_public_ipv4();
-            let domain = env::var("DOMAIN").unwrap();
-            let row_id = env::var("DNS_ROW_ID").unwrap();
-            wedos::update_a_record(public_ipv4, domain, row_id, None);
+            let public_ipv4 = ipv4::get_public_ipv4()?;
+            let domain = env::var("DOMAIN").context("DOMAIN not set")?;
+            let row_id = env::var("DNS_ROW_ID").context("DNS_ROW_ID not set")?;
+
+            if wedos::update_a_record_if_changed(public_ipv4, domain, row_id)? {
+                println!("updated to {public_ipv4}");
+            } else {
+                println!("unchanged, already {public_ipv4}");
+            }
         }
         _ => unreachable!(),
     }
+
+    Ok(())
 }

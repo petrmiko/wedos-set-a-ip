@@ -9,7 +9,7 @@ mod wedos;
 fn main() -> Result<()> {
     dotenv().ok();
     let arg_matches = Command::new("WedosDnsTool")
-        .version("0.0.1")
+        .version(env!("CARGO_PKG_VERSION"))
         .arg(
             Arg::new("MODE")
                 .short('m')

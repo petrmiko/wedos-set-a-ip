@@ -138,6 +138,11 @@ fn find_row<'a>(response: &'a Value, row_id: &str) -> Option<&'a Value> {
     rows(response).find(|row| field(row, "ID").as_deref() == Some(row_id))
 }
 
+fn desired_ttl(row: Option<&Value>) -> String {
+    row.and_then(|row| field(row, "ttl"))
+        .unwrap_or_else(|| DEFAULT_TTL.to_string())
+}
+
 fn make_request(command: WapiCommand) -> Result<Value> {
     let wapi_url =
         env::var("WEDOS_API_URL").unwrap_or(String::from("https://api.wedos.com/wapi/json"));
@@ -168,9 +173,9 @@ pub fn list_dns_rows(domain: String) -> Result<Value> {
 pub fn update_a_record_if_changed(ipv4: Ipv4Addr, domain: String, row_id: String) -> Result<bool> {
     let listing = list_dns_rows(domain.clone())?;
     let rdata = ipv4.to_string();
-    let ttl = DEFAULT_TTL.to_string();
+    let row = find_row(&listing, &row_id);
 
-    match find_row(&listing, &row_id) {
+    match row {
         Some(row) => {
             let rdtype = field(row, "rdtype").unwrap_or_default();
             anyhow::ensure!(
@@ -178,9 +183,7 @@ pub fn update_a_record_if_changed(ipv4: Ipv4Addr, domain: String, row_id: String
                 "DNS row {row_id} of {domain} is an {rdtype} record, refusing to write an IPv4 to it"
             );
 
-            if field(row, "rdata").as_deref() == Some(rdata.as_str())
-                && field(row, "ttl").as_deref() == Some(ttl.as_str())
-            {
+            if field(row, "rdata").as_deref() == Some(rdata.as_str()) {
                 return Ok(false);
             }
         }
@@ -192,7 +195,7 @@ pub fn update_a_record_if_changed(ipv4: Ipv4Addr, domain: String, row_id: String
     make_request(WapiCommand::DnsRowUpdate(WapiDnsRowUpdateData {
         domain,
         row_id,
-        ttl,
+        ttl: desired_ttl(row),
         rdata,
     }))?;
 
@@ -252,6 +255,14 @@ mod tests {
     fn missing_row_id_yields_none() {
         assert!(find_row(&array_shape(), "999").is_none());
         assert!(find_row(&json!({ "response": { "code": 1000 } }), "42").is_none());
+    }
+
+    #[test]
+    fn keeps_the_ttl_the_record_already_has() {
+        let existing = json!({ "ID": "42", "ttl": "3600", "rdtype": "A", "rdata": "9.9.9.9" });
+
+        assert_eq!(desired_ttl(Some(&existing)), "3600");
+        assert_eq!(desired_ttl(None), DEFAULT_TTL.to_string());
     }
 
     #[test]
